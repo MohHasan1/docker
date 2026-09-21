@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: # Metadata ABOUT the Deployment
+  name: service-a-price
+spec: # Instructions FOR the Deployment
+  replicas: 1
+  selector: # Deployment-level setting
+    matchLabels:
+      app: service-a
+  template: # Blueprint for the Pods
+    metadata: # Metadata ABOUT each Pod
+      labels:
+        app:
+    spec: # Instructions FOR each Pod
+      containers: # Containers INSIDE the Pod
+        - name: service-a
+          image: embarkx/tax-service-a:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: TAX_SERVICE_URL
+              value: "http://service-b-tax:4000"
+              # valueFrom:
+              #   configMapKeyRef:
+              #     name: app-config
+              #     key: APP_MESSAGE
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-a-price
+spec:
+  selector:
+    app: service-a
+  type: NodePort
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30000

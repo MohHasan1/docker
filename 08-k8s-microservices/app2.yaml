@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:  # Metadata ABOUT the Deployment
+  name: service-b-tax
+spec:  # Instructions FOR the Deployment
+  replicas: 1
+  selector:   # Deployment-level setting
+    matchLabels:
+      app: service-b
+  template:  # Blueprint for the Pods
+    metadata:  # Metadata ABOUT each Pod
+      labels:
+        app: service-b
+    spec:  # Instructions FOR each Pod
+      containers:   # Containers INSIDE the Pod
+        - name: service-b
+          image: embarkx/tax-service-b:latest
+          ports:
+            - containerPort: 4000
+          # env:
+          #   - name: ENV_VALUE
+          #     value: "Hello from pod - spring boot"
+              # valueFrom:
+              #   configMapKeyRef:
+              #     name: app-config
+              #     key: APP_MESSAGE
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-b-tax
+spec:
+  selector:
+    app: service-b
+  type: ClusterIP
+  ports:
+    - port: 4000
+      targetPort: 4000

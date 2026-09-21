@@ -1,0 +1,12 @@
+http://localhost:30000/price?country=in&amount=900
+
+
+kubectl delete all --all
+
+kubectl apply -f app2.yaml -f app1.yaml
+kubectl get pods
+
+kubectl delete -f service-a-price
+kubectl delete -f service-b-tax-service-a
+
+kubectl get pods -w
