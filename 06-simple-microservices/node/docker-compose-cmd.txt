@@ -1,0 +1,7 @@
+// NOTE: fixed container_name values prevent scaling a service into multiple containers.
+
+1 - Running 
+docker compose up -d
+
+2- Stopping
+docker compose down

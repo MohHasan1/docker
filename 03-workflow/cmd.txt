@@ -1,0 +1,4 @@
+FOR POWERSHELL
+docker run -p 3000:3000 -v /app/node_modules -v ${PWD}:/app 03-workflow-dev
+
+docker build --no-cache -f Dockerfile.dev -t 03-workflow-dev .

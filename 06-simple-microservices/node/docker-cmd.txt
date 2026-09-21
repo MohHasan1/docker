@@ -1,0 +1,48 @@
+NODE Docker Hub - https://hub.docker.com/_/node
+
+1 - Building images
+docker build -t service-a .\service-a\
+docker build -t service-b .\service-b\
+
+2 - Check images
+docker images
+
+3 - Run docker containers
+docker run -d --name service-a -p 3000:3000 service-a
+docker run -d --name service-b -p 4000:4000 service-b
+
+4 - Check all running containers
+docker ps
+
+5 - Check logs
+docker logs service-a
+docker logs service-b
+
+5.2 - To attach logs to a terminal
+docker logs -f service-a 
+
+6. To stop docker containers
+docker stop service-a
+docker stop service-b
+
+7 - To remove stopped Containers
+docker rm service-a service-b
+
+7.1 - To remove a running a Container
+docker rm -f service-a
+
+8 - To remove a images
+docker rmi service-a
+
+9 - To add a docker network
+docker network create service-network
+
+10 - Add container to creates network
+docker run -d --name service-a -p 3000:3000 --network service-network service-a
+docker run -d --name service-b -p 4000:4000 --network service-network service-b
+
+11 - Passing a env variable: (The port should be container's port not the exposed port.)
+docker run -d --name service-a -p 3000:3000 --network service-network -e TAX_SERVICE_URL=http://service-b:4000 service-a
+
+12 - Passing env variables from a .env file
+docker run -d --name service-a -p 3000:3000 --network service-network --env-file .env service-a

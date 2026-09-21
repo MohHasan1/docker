@@ -1,0 +1,29 @@
+services:
+  service-a:
+    build: ./service-a
+    image: service-a # opt 
+    container_name: service-a # opt 
+    ports: 
+      - "3000:3000"
+    depends_on:
+      - service-b
+    environment: 
+      - TAX_SERVICE_URL=http://service-b:4000
+    networks: # opt 
+      - service-network
+
+  service-b:
+    build: ./service-b
+    image: service-b # opt 
+    container_name: service-b # opt 
+    ports: 
+      - "4000:4000"
+    networks: # opt 
+      - service-network
+
+
+# opt
+networks: 
+  service-network:
+    name: service-network
+    external: true
