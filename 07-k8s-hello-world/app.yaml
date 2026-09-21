@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:  # Metadata ABOUT the Deployment
+  name: hello-world
+spec:  # Instructions FOR the Deployment
+  replicas: 1
+  selector:   # Deployment-level setting
+    matchLabels:
+      app: hello-world
+  template:  # Blueprint for the Pods
+    metadata:  # Metadata ABOUT each Pod
+      labels:
+        app: hello-world
+    spec:  # Instructions FOR each Pod
+      containers:   # Containers INSIDE the Pod
+        - name: hello-world
+          image: embarkx/hello-spring:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ENV_VALUE
+            #   value: "Hello from pod - spring boot"
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: APP_MESSAGE
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-world
+spec:
+  selector:
+    app: hello-world
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30000
