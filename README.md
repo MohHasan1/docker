@@ -7,9 +7,11 @@ A collection of hands-on Docker exercises covering image builds, development con
 | Directory | Description |
 | --- | --- |
 | `03-workflow` | React development and production Docker workflow, including a Compose test service. |
-| `04-multu-container` | Multi-container React, Node.js, PostgreSQL, and Redis practice project. |
+| [`04-multi-container`](04-multi-container/README.md) | Fibonacci calculator split across nginx, React, Express, a worker, Redis, and PostgreSQL with Docker Compose. |
 | `05-docker-review` | Small Node.js, Python, and Spring Boot examples for reviewing container basics. |
 | `06-simple-microservices` | Node.js, Python, Spring Boot, and React microservice examples. |
+| [`07-k8s-hello-world`](07-k8s-hello-world/README.md) | Spring Boot app deployed to Kubernetes with a ConfigMap and a NodePort Service. |
+| [`08-k8s-microservices`](08-k8s-microservices/README.md) | Two services communicating inside a Kubernetes cluster. |
 
 ## Requirements
 
@@ -32,6 +34,15 @@ Open <http://localhost:3000>. Stop the containers with:
 ```bash
 docker compose down
 ```
+
+### Multi-container Fibonacci calculator
+
+```bash
+cd 04-multi-container
+docker compose up --build
+```
+
+Open <http://localhost:3050>. nginx is the only published port; it routes `/` to the React client and `/api` to the Express API. The [exercise README](04-multi-container/README.md) has the system design diagram, every command, and the problems hit along the way.
 
 ### Node.js microservices
 
