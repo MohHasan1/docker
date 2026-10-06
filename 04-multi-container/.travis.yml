@@ -9,8 +9,16 @@ script:
   - docker run -e CI=true react-test npm test -- --coverage
 
 after_success:
-  - docker build -t client ./client
-  - docker build -t nginx ./nginx
-  - docker build -t server ./server
-  - docker build -t worker ./worker
+  - docker build -t "$DOCKER_ID/client" ./client
+  - docker build -t "$DOCKER_ID/nginx" ./nginx
+  - docker build -t "$DOCKER_ID/server" ./server
+  - docker build -t "$DOCKER_ID/worker" ./worker
 
+  # Login to docker Hub
+  - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_ID" --password-stdin
+
+  # Take the images and push to docker Hub
+  - docker push "$DOCKER_ID/client"
+  - docker push "$DOCKER_ID/nginx"
+  - docker push "$DOCKER_ID/server"
+  - docker push "$DOCKER_ID/worker"

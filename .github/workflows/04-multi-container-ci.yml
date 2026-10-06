@@ -33,3 +33,20 @@ jobs:
           docker build -t nginx ./nginx
           docker build -t server ./server
           docker build -t worker ./worker
+
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push'
+        env:
+          DOCKER_ID: ${{ secrets.DOCKER_ID }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_ID" --password-stdin
+
+      - name: Push images to Docker Hub
+        if: github.event_name == 'push'
+        env:
+          DOCKER_ID: ${{ secrets.DOCKER_ID }}
+        run: |
+          for image in client nginx server worker; do
+            docker tag "$image" "$DOCKER_ID/$image"
+            docker push "$DOCKER_ID/$image"
+          done

@@ -40,6 +40,23 @@ jobs:
           docker build -t nginx ./nginx
           docker build -t server ./server
           docker build -t worker ./worker
+
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push'
+        env:
+          DOCKER_ID: ${{ secrets.DOCKER_ID }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_ID" --password-stdin
+
+      - name: Push images to Docker Hub
+        if: github.event_name == 'push'
+        env:
+          DOCKER_ID: ${{ secrets.DOCKER_ID }}
+        run: |
+          for image in client nginx server worker; do
+            docker tag "$image" "$DOCKER_ID/$image"
+            docker push "$DOCKER_ID/$image"
+          done
 ```
 
 ## How does it map to the Travis file?
@@ -50,6 +67,8 @@ jobs:
 | `before_install` | step "Build test image" | Builds `react-test` from `client/Dockerfile.dev` |
 | `script` | step "Run tests" | Runs `npm test -- --coverage` inside that image |
 | `after_success` | step "Build production images" | Builds `client`, `nginx`, `server`, `worker` |
+| `after_success` (`docker login`) | step "Log in to Docker Hub" | Logs in with `DOCKER_ID` and `DOCKER_PASSWORD` |
+| `after_success` (`docker push`) | step "Push images to Docker Hub" | Pushes the four images as `$DOCKER_ID/<name>` |
 | automatic | step "Clone repo" | Gets the code onto the machine |
 
 ## Where must the workflow file live?
@@ -196,7 +215,150 @@ To run a step even after a failure, for example to upload logs:
 
 ## Why is `-e CI=true` on the test command?
 
-It tells the test runner it is running in CI, so it runs once and exits. Without it, Jest can start in watch mode and wait for input forever, and the job hangs.
+It tells the test runner it is running in CI, so it runs once and exits. Without it, the job hangs.
+
+The client is a Create React App project, so `npm test` runs `react-scripts test`. That starts Jest in **watch mode** by default: it runs the tests, then waits for a key press or a file change. Nobody is there to press a key in CI, so the step would never finish.
+
+`react-scripts` checks for an environment variable called `CI`. When it is `true`, the tests run once and the command exits with a pass or fail code, which is what marks the step green or red.
+
+The command piece by piece:
+
+```bash
+docker run -e CI=true react-test npm test -- --coverage
+```
+
+- `-e CI=true`: `-e` sets an environment variable inside the container.
+- `react-test`: the image built in the step before.
+- `npm test -- --coverage`: the command to run in the container. The `--` passes `--coverage` through to Jest.
+
+GitHub Actions already sets `CI=true` on the runner, but that variable does not pass into a container on its own. The tests run inside the container, so it has to be handed in with `-e`.
+
+## Is Docker already installed on the runner?
+
+Yes, on `ubuntu-latest`. Docker, Docker Compose and Buildx are preinstalled and the daemon is already running, so the workflow can call `docker build` straight after the clone step with no setup step.
+
+This only holds for the Linux runners:
+
+| Runner | Docker |
+|---|---|
+| `ubuntu-latest` | Installed and running. Builds Linux images. |
+| `windows-latest` | Installed, but runs Windows containers, so these Linux images won't build. |
+| `macos-latest` | Not installed. |
+
+This is different from a local machine, where Docker Desktop has to be started before any `docker` command works.
+
+## Is `echo` necessary in the `docker login` command?
+
+```bash
+echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_ID" --password-stdin
+```
+
+Not strictly, but something has to feed the password into `docker login`, and `echo` is the simplest way.
+
+`--password-stdin` tells `docker login` to read the password from standard input instead of from the command line. `echo` prints the password, and the shell `|` pipes it into that input.
+
+The alternative without `echo` passes the password as a flag:
+
+```bash
+docker login -u "$DOCKER_ID" -p "$DOCKER_PASSWORD"
+```
+
+It works, but Docker warns that it is insecure. The password becomes part of the command itself and can show up in the process list or shell history. The piped form is the one Docker recommends for CI.
+
+## Is `echo` safe for a password?
+
+Yes, in this command:
+
+- **The output goes into the pipe, not the log.** `echo` normally prints to the screen, but `|` sends that output straight into `docker login`. Nothing is displayed.
+- **The log shows the variable name, not the value.** The step prints the literal text `echo "$DOCKER_PASSWORD" | docker login ...`. The shell fills in the real password only when it runs.
+- **CI masks secrets anyway.** If the value did reach the output, GitHub Actions and Travis replace it with `***`.
+
+`echo` is also built into the shell rather than run as a separate program, so the password does not appear in the machine's process list the way it does with `-p`.
+
+It is unsafe without the pipe. A plain `echo "$DOCKER_PASSWORD"` on its own line prints the password to the log, and only the masking protects it.
+
+## Is `env:` needed, or can I just use `$DOCKER_ID`?
+
+`env:` is needed. Without it, `$DOCKER_ID` is empty.
+
+Secrets in GitHub Actions are not environment variables by default. They live in the `secrets` store, and the `env:` block copies one into the shell under a name you choose:
+
+```yaml
+env:
+  DOCKER_ID: ${{ secrets.DOCKER_ID }}   # makes $DOCKER_ID exist for this step
+run: docker push "$DOCKER_ID/client"
+```
+
+Travis is different. Variables added in the Travis settings are injected as environment variables automatically, so `$DOCKER_ID` works in `.travis.yml` with no extra lines.
+
+`env:` can be skipped by writing the secret directly in the command:
+
+```yaml
+run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_ID }}" --password-stdin
+```
+
+It works, but GitHub pastes the secret's text into the script before the shell runs it. A password containing `"`, `$` or a backtick can break the command or be run as code. Going through `env:` avoids that, and it is what GitHub recommends.
+
+`env:` can also be declared once at the job level instead of on each step. Every step can then use the variables, but the password is visible to every step, including the test run, rather than only the login step.
+
+## What does the `for` loop in the push step do?
+
+```bash
+for image in client nginx server worker; do
+  docker tag "$image" "$DOCKER_ID/$image"
+  docker push "$DOCKER_ID/$image"
+done
+```
+
+It runs the same two commands for each of the four images, instead of writing eight lines.
+
+- `for image in client nginx server worker; do`: go through the four names one at a time. On each pass, `$image` holds the current name.
+- `docker tag "$image" "$DOCKER_ID/$image"`: give the image a second name that includes the Docker Hub ID.
+- `docker push "$DOCKER_ID/$image"`: upload the image under that new name.
+- `done`: end of the loop body. Go back for the next name.
+
+With a Docker ID of `mohhasan`, the first pass runs as:
+
+```bash
+docker tag client mohhasan/client
+docker push mohhasan/client
+```
+
+## What does `docker tag` do?
+
+It adds another name to an existing image:
+
+```bash
+docker tag <existing name> <new name>
+```
+
+Nothing is copied or rebuilt. Both names point at the same image, like two labels on one box.
+
+It is needed because the name decides where a push goes. The build step names the images plainly (`client`, `nginx`, ...), and Docker Hub reads a bare name as an official image, which you cannot push to. The name has to be `<your Docker ID>/<image>` for the push to land in your account.
+
+`.travis.yml` skips the tag step because it builds with the full name from the start (`docker build -t "$DOCKER_ID/client"`). The workflow tags afterwards instead, so the build step still works on pull requests, where the `DOCKER_ID` secret is not available.
+
+## Is the loop GitHub Actions syntax or bash?
+
+Bash. Everything under `run:` is a shell script that GitHub hands to the runner's shell as it is, and on `ubuntu-latest` that shell is bash.
+
+The workflow file mixes two languages:
+
+| Language | Where |
+|---|---|
+| GitHub Actions (YAML) | Keys such as `name:`, `if:`, `env:`, `run:`, and anything inside `${{ ... }}` |
+| Bash | The text under `run:`: the `for` loop, `$image`, `$DOCKER_ID`, the pipe in the login line, the `docker` commands |
+
+So the loop works in any Linux or macOS terminal, and in Git Bash or WSL on Windows. It does not work in PowerShell or cmd, which have their own loop syntax. The PowerShell version:
+
+```powershell
+foreach ($image in "client","nginx","server","worker") {
+  docker tag $image "$env:DOCKER_ID/$image"
+  docker push "$env:DOCKER_ID/$image"
+}
+```
+
+Travis also runs its commands in bash, which is why the `.travis.yml` lines look so similar.
 
 ## What does `|` mean after `run:`?
 
@@ -244,4 +406,5 @@ In GitHub Actions, `-` belongs one level up, in the list of steps. To use that s
 ## Things to remember about this project
 
 - The test in `client/src/App.test.js` is commented out, so the test step always passes until it is restored.
-- The workflow only builds the images. It does not push them to Docker Hub. That needs a login step and `docker push`.
+- The workflow pushes the images to Docker Hub, but only on `push` events, not on pull requests. It needs two repository secrets, `DOCKER_ID` and `DOCKER_PASSWORD`, set under Settings → Secrets and variables → Actions.
+- `docker push` takes one image per command, and the image name must start with your Docker Hub ID (`$DOCKER_ID/client`). A bare name like `client` is treated as an official Docker Hub image, which you cannot push to.
