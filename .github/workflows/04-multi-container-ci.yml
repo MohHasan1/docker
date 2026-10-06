@@ -1,0 +1,35 @@
+name: 04-Multi-container CI
+
+on:
+  push:
+    paths:
+      - "04-multi-container/**"
+      - ".github/workflows/04-multi-container-ci.yml"
+  pull_request:
+    paths:
+      - "04-multi-container/**"
+      - ".github/workflows/04-multi-container-ci.yml"
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 04-multi-container
+
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v4
+
+      - name: Build test image
+        run: docker build -t react-test -f ./client/Dockerfile.dev ./client
+
+      - name: Run tests
+        run: docker run -e CI=true react-test npm test -- --coverage
+
+      - name: Build production images
+        run: |
+          docker build -t client ./client
+          docker build -t nginx ./nginx
+          docker build -t server ./server
+          docker build -t worker ./worker
